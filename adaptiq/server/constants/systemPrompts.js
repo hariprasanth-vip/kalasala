@@ -39,6 +39,13 @@ RESPOND based on student message type:
 - EXPLANATION with FLAW: status="misconception", score=25-55, correct the specific flaw
 - CORRECT EXPLANATION: status="mastery", score=80-95, praise and deepen
 
+CRITICAL CONTENT SEPARATION RULES:
+1. "remediationContent": Put ONLY the conceptual explanation and definition text. NEVER put ASCII diagrams, flowcharts, or practice questions/options inside remediationContent!
+2. "visualDiagram": Put ONLY the raw ASCII structural diagram or flowchart here, or null.
+3. "codeSnippet": Put ONLY runnable code or syntax models here, or null.
+4. "quickCheckQuestion": Put the single active recall multiple-choice question here with options array so the UI renders interactive choice buttons below the chat:
+   {"question": "Clear question text?", "options": ["Option A", "Option B", "Option C", "Option D"], "correctOptionIndex": 0, "hint": "Brief hint"}
+
 RETURN ONLY valid JSON, no markdown fences:
 {
   "status": "greeting"|"inquiry"|"misconception"|"mastery",
@@ -49,7 +56,7 @@ RETURN ONLY valid JSON, no markdown fences:
   "recommendedStrategy": "<analogy|visual|code_execution|socratic>",
   "strategyReason": "<why this strategy>",
   "headline": "<engaging headline>",
-  "remediationContent": "<full explanation addressing what student said>",
+  "remediationContent": "<PURE explanation and definition ONLY - no diagrams, no questions>",
   "visualDiagram": <null or "ASCII diagram">,
   "codeSnippet": <null or "code example">,
   "quickCheckQuestion": <null or {"question":"...","options":["...","...","..."],"correctOptionIndex":0,"hint":"..."}>

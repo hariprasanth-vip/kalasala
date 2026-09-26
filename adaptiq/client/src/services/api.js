@@ -170,8 +170,127 @@ export const verifyQuickCheck = async ({
       status: isCorrect ? 'mastery' : 'misconception',
       updatedDna: { analogy: 45, visual: 25, codeExecution: 20, socratic: 5, firstPrinciples: 5 },
       message: isCorrect
-        ? '✅ Correct! Well done!'
-        : '❌ Not quite — try reviewing the explanation and attempt again.'
+        ? 'Correct! Well done!'
+        : 'Not quite — try reviewing the explanation and attempt again.'
     };
   }
 };
+
+export const fetchLearningHistory = async () => {
+  try {
+    const res = await fetch(`${BASE_URL}/sessions/history/all`);
+    const json = await res.json();
+    if (json.success) return json.history || [];
+  } catch (err) {
+    console.warn('Backend history unavailable:', err.message);
+  }
+  return [];
+};
+
+export const fetchStudentProfile = async (studentId = '65f000000000000000000001') => {
+  try {
+    const res = await fetch(`${BASE_URL}/student/${studentId}`);
+    const json = await res.json();
+    if (json.success) return json.student;
+  } catch (err) {
+    console.warn('Backend student profile unavailable:', err.message);
+  }
+  return null;
+};
+
+export const fetchAllStudents = async () => {
+  try {
+    const res = await fetch(`${BASE_URL}/student/all`);
+    const json = await res.json();
+    if (json.success) return json.students || [];
+  } catch (err) {
+    console.warn('Backend students list unavailable:', err.message);
+  }
+  return [];
+};
+
+export const loginStudentApi = async ({ email, password }) => {
+  try {
+    const res = await fetch(`${BASE_URL}/student/login`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ email, password })
+    });
+    return await res.json();
+  } catch (err) {
+    console.warn('Backend login error:', err.message);
+    return { success: false, message: 'Server connection error' };
+  }
+};
+
+export const registerStudentApi = async (studentData) => {
+  try {
+    const res = await fetch(`${BASE_URL}/student/register`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(studentData)
+    });
+    return await res.json();
+  } catch (err) {
+    console.warn('Backend registration error:', err.message);
+    return { success: false, message: 'Server connection error' };
+  }
+};
+
+export const updateStudentProfileApi = async (data, studentId = '65f000000000000000000001') => {
+  try {
+    const res = await fetch(`${BASE_URL}/student/${studentId}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data)
+    });
+    return await res.json();
+  } catch (err) {
+    console.warn('Error updating student profile:', err.message);
+    return { success: false };
+  }
+};
+
+export const resetStudentDnaApi = async (studentId = '65f000000000000000000001') => {
+  try {
+    const res = await fetch(`${BASE_URL}/student/${studentId}/reset-dna`, {
+      method: 'POST',
+      headers: getHeaders()
+    });
+    return await res.json();
+  } catch (err) {
+    console.warn('Error resetting DNA:', err.message);
+    return { success: false };
+  }
+};
+
+export const fetchTopicAssessment = async (topicId = 'Recursion') => {
+  try {
+    const res = await fetch(`${BASE_URL}/tutor/assessment`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ topicId })
+    });
+    return await res.json();
+  } catch (err) {
+    console.warn('Error fetching assessment from Ollama:', err.message);
+    return { success: false, message: err.message };
+  }
+};
+
+export const submitTopicAssessmentApi = async ({ studentId, topicId, correctCount, totalQuestions, answers }) => {
+  try {
+    const res = await fetch(`${BASE_URL}/tutor/submit-assessment`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ studentId, topicId, correctCount, totalQuestions, answers })
+    });
+    return await res.json();
+  } catch (err) {
+    console.warn('Error submitting assessment:', err.message);
+    return { success: false, message: err.message };
+  }
+};
+
+
+

@@ -211,6 +211,124 @@ const parseDiagnosisResponse = (rawContent, fallbackPrompt = '') => {
       };
     }
 
+/**
+ * Clean and separate pedagogical content fields.
+ * Ensures:
+ * 1. remediationContent contains ONLY the conceptual explanation and definitions.
+ * 2. Any embedded ASCII diagrams are stripped from explanation and routed to visualDiagram.
+ * 3. Any embedded active recall/practice questions and options are stripped from explanation
+ *    and routed to quickCheckQuestion (allowing the UI to render selectable option buttons).
+ */
+const sanitizePedagogicalContent = ({ remediationContent, visualDiagram, codeSnippet, quickCheckQuestion }) => {
+  let explanation = (remediationContent || '').trim();
+  let diagram = visualDiagram || null;
+  let code = codeSnippet || null;
+  let quickCheck = quickCheckQuestion || null;
+
+  // 1. Extract & strip ASCII diagram from explanation if present
+  const diagramRegex = /(?:\*{0,2}(?:ASCII\s*(?:Structural\s*)?Diagram|Visual\s*(?:Concept\s*)?Diagram|Flowchart|Diagram)\s*:?\*{0,2}\s*(?:```[\s\S]*?```|`[\s\S]*?`))/i;
+  const diagMatch = explanation.match(diagramRegex);
+  if (diagMatch) {
+    if (!diagram) {
+      const rawDiagram = diagMatch[0];
+      const codeFenceMatch = rawDiagram.match(/```(?:\w+)?\s*([\s\S]*?)```/);
+      diagram = codeFenceMatch ? codeFenceMatch[1].trim() : rawDiagram.replace(/^\*{0,2}[^:]*:\*{0,2}\s*/i, '').trim();
+    }
+    explanation = explanation.replace(diagramRegex, '').trim();
+  }
+
+  // 2. Extract & strip Active Recall / Practice Question from explanation if present
+  const questionBlockRegex = /(?:\*{0,2}(?:Active Recall|Practice|Quick Check|Diagnostic|Self-Check|Concept Check)\s*(?:Practice\s*)?Question\s*:?\*{0,2}[\s\S]*)/i;
+  const qMatch = explanation.match(questionBlockRegex);
+  
+  if (qMatch) {
+    const rawQuestionBlock = qMatch[0];
+    if (!quickCheck || !quickCheck.question || !Array.isArray(quickCheck.options) || quickCheck.options.length < 2) {
+      const lines = rawQuestionBlock.split('\n').map(l => l.trim()).filter(Boolean);
+      let qText = '';
+      const options = [];
+
+      for (const line of lines) {
+        if (/^(?:\*{0,2}(?:Active Recall|Practice|Quick Check|Diagnostic|Self-Check|Concept Check))/i.test(line)) {
+          const afterColon = line.replace(/^\*{0,2}[^:]*:\*{0,2}\s*/, '').trim();
+          if (afterColon) qText = afterColon;
+          continue;
+        }
+
+        // Match options: a) ..., B) ..., 1) ..., - A) ..., * a) ...
+        const optMatch = line.match(/^(?:[-*•]\s*)?([a-dA-D1-4])[.)\]]\s*(.+)$/);
+        if (optMatch) {
+          options.push(optMatch[2].trim());
+        } else if (!qText) {
+          qText = line;
+        } else if (options.length === 0) {
+          qText += ' ' + line;
+        }
+      }
+
+      if (qText && options.length >= 2) {
+        quickCheck = {
+          question: qText.trim(),
+          options: options,
+          correctOptionIndex: 0,
+          hint: 'Select the most appropriate option based on the explanation.'
+        };
+      }
+    }
+    explanation = explanation.replace(questionBlockRegex, '').trim();
+  }
+
+  // 3. Fallback: Check if explanation ends with trailing options even without header
+  const trailingOptionsRegex = /\n+(?:(?:[-*•]\s*)?[a-dA-D1-4][.)\]]\s*.+\n?){2,}$/;
+  if (trailingOptionsRegex.test(explanation)) {
+    const matchedOpts = explanation.match(trailingOptionsRegex)[0];
+    if (!quickCheck || !quickCheck.question) {
+      const optLines = matchedOpts.split('\n').map(l => l.trim()).filter(Boolean);
+      const extractedOpts = optLines.map(l => l.replace(/^(?:[-*•]\s*)?[a-dA-D1-4][.)\]]\s*/, '').trim()).filter(Boolean);
+      if (extractedOpts.length >= 2) {
+        const textBeforeOpts = explanation.replace(trailingOptionsRegex, '').trim();
+        const linesBefore = textBeforeOpts.split('\n').map(l => l.trim()).filter(Boolean);
+        const likelyQuestion = linesBefore.length > 0 ? linesBefore[linesBefore.length - 1] : 'Choose the correct answer:';
+        quickCheck = {
+          question: likelyQuestion,
+          options: extractedOpts,
+          correctOptionIndex: 0,
+          hint: 'Choose the correct option.'
+        };
+        if (linesBefore.length > 1) {
+          linesBefore.pop();
+          explanation = linesBefore.join('\n\n').trim();
+        } else {
+          explanation = textBeforeOpts;
+        }
+      }
+    } else {
+      explanation = explanation.replace(trailingOptionsRegex, '').trim();
+    }
+  }
+
+  // 4. Strip stray ASCII code fences from explanation if diagram was already created
+  explanation = explanation.replace(/```(?:ascii|text)?\s*[\s\S]*?[/\\|+_]{2,}[\s\S]*?```/gi, '').trim();
+
+  return {
+    remediationContent: explanation,
+    visualDiagram: diagram,
+    codeSnippet: code,
+    quickCheckQuestion: quickCheck
+  };
+};
+
+    // ── Sanitize & Separate Content Fields ────────────────────────────────
+    // Ensures explanation contains ONLY the pedagogical explanation/definition.
+    // ASCII diagrams go strictly to visualDiagram.
+    // Practice questions & choices go strictly to quickCheckQuestion (for option buttons).
+    const sanitized = sanitizePedagogicalContent({
+      remediationContent,
+      visualDiagram: parsed.visualDiagram || null,
+      codeSnippet: parsed.codeSnippet || null,
+      quickCheckQuestion
+    });
+
     return {
       understandingScore: score,
       status,
@@ -220,10 +338,10 @@ const parseDiagnosisResponse = (rawContent, fallbackPrompt = '') => {
       recommendedStrategy,
       strategyReason,
       headline: parsed.headline || headline,
-      remediationContent,
-      visualDiagram: parsed.visualDiagram || null,
-      codeSnippet: parsed.codeSnippet || null,
-      quickCheckQuestion: isGreeting ? null : quickCheckQuestion,
+      remediationContent: sanitized.remediationContent,
+      visualDiagram: sanitized.visualDiagram,
+      codeSnippet: sanitized.codeSnippet,
+      quickCheckQuestion: isGreeting ? null : sanitized.quickCheckQuestion,
       misconceptionDetected: isMisconception,
       misconceptionKey: missingConcept
         ? missingConcept.toLowerCase().replace(/\s+/g, '_')

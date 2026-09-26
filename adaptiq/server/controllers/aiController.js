@@ -157,7 +157,7 @@ const processStudentInteraction = async (req, res, next) => {
           Math.max(10, (profile.cognitiveLoad || 45) + (isMisconception ? 10 : -8))
         );
         profile.updatedAt = new Date();
-        await profile.save().catch(() => {});
+        await profile.save().catch(() => { });
       } else {
         inMemoryProfile.dna = dnaUpdate.dna;
         inMemoryProfile.cognitiveLoad = Math.min(
@@ -172,7 +172,7 @@ const processStudentInteraction = async (req, res, next) => {
       if (!isGreeting) session.currentScore = score;
       session.dominantStrategy = activeStrategy;
       session.totalInteractions = (session.totalInteractions || 0) + 1;
-      await session.save().catch(() => {});
+      await session.save().catch(() => { });
     } else if (inMemorySessions[sessionId]) {
       if (!isGreeting) inMemorySessions[sessionId].currentScore = score;
       inMemorySessions[sessionId].dominantStrategy = activeStrategy;
@@ -183,9 +183,9 @@ const processStudentInteraction = async (req, res, next) => {
     // All content (headline, coreExplanation, diagram, code) comes directly from the LLM
     const dynamicHeadline = cognitiveResult.headline || (
       isGreeting ? '👋 Welcome to AdaptIQ!' :
-      cognitiveResult.status === 'inquiry' ? `💡 Understanding ${cognitiveResult.detectedConcept || topicId}` :
-      isMisconception ? `🎯 Strategy Pivot: Clarifying ${cognitiveResult.missingConcept || 'the Concept'}` :
-      `🎉 Concept Mastered!`
+        cognitiveResult.status === 'inquiry' ? `💡 Understanding ${cognitiveResult.detectedConcept || topicId}` :
+          isMisconception ? `🎯 Strategy Pivot: Clarifying ${cognitiveResult.missingConcept || 'the Concept'}` :
+            `🎉 Concept Mastered!`
     );
 
     const tutorResponse = {
@@ -281,7 +281,7 @@ const verifyStudentAnswer = async (req, res, next) => {
     let session = await Session.findById(sessionId).catch(() => null);
     if (session) {
       session.currentScore = newScore;
-      await session.save().catch(() => {});
+      await session.save().catch(() => { });
     } else if (inMemorySessions[sessionId]) {
       inMemorySessions[sessionId].currentScore = newScore;
     }
@@ -299,7 +299,7 @@ const verifyStudentAnswer = async (req, res, next) => {
 
     if (profile.save) {
       profile.dna = dnaUpdate.dna;
-      await profile.save().catch(() => {});
+      await profile.save().catch(() => { });
     } else {
       inMemoryProfile.dna = dnaUpdate.dna;
     }
@@ -319,8 +319,220 @@ const verifyStudentAnswer = async (req, res, next) => {
   }
 };
 
+/**
+ * Real-Time 5-Question Diagnostic Assessment Generator via Ollama (Gemma 3)
+ * Endpoint: POST /api/tutor/assessment
+ * Generates 100% dynamic questions directly from local Ollama for any topic!
+ */
+const getTopicAssessment = async (req, res, next) => {
+  try {
+    const topic = (req.body.topicId || req.query.topic || 'Computer Science').trim();
+    console.log(`[Assessment] Requesting 5 real-time diagnostic questions from Ollama for topic: "${topic}"...`);
+
+    const prompt = `Generate exactly 5 multiple choice diagnostic questions to evaluate a student's deep conceptual understanding of: "${topic}".
+Each question must test a different angle (definitions, mechanisms, common misconceptions, code logic, edge cases).
+Return strictly a valid JSON object with this exact structure:
+{
+  "topicId": "${topic}",
+  "questions": [
+    {
+      "id": 1,
+      "question": "Question text",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctIndex": 0,
+      "explanation": "Clear explanation of why this answer is correct."
+    }
+  ]
+}`;
+
+    const systemInstruction = 'You are a Senior Computer Science Professor and Diagnostic Evaluator. Return ONLY valid JSON containing 5 multiple choice questions. Do NOT wrap in markdown fences. Output raw JSON only.';
+
+    let rawOutput = null;
+    let modelSource = 'ollama-gemma3-realtime';
+
+    // 1. Try Ollama (Gemma 3) Local
+    const ollama = require('../services/ollamaService');
+    const isOllamaUp = await ollama.isAvailable();
+    if (isOllamaUp) {
+      try {
+        rawOutput = await ollama.generateChatResponse(
+          [{ role: 'user', content: prompt }],
+          systemInstruction
+        );
+      } catch (ollamaErr) {
+        console.warn(`[Assessment] Ollama generation failed (${ollamaErr.message}), trying cloud AI tier...`);
+      }
+    }
+
+    // 2. Fallback to Gemini 2.5 if Ollama was down or errored
+    if (!rawOutput && process.env.GEMINI_API_KEY) {
+      try {
+        const { GoogleGenAI } = require('@google/genai');
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const geminiRes = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: `${systemInstruction}\n\n${prompt}`,
+          config: { responseMimeType: 'application/json' }
+        });
+        rawOutput = geminiRes.text?.();
+        modelSource = 'gemini-2.5-flash-realtime';
+      } catch (geminiErr) {
+        console.warn(`[Assessment] Gemini tier failed: ${geminiErr.message}`);
+      }
+    }
+
+    // 3. Fallback to Groq if both failed
+    if (!rawOutput && process.env.GROQ_API_KEY) {
+      try {
+        const Groq = require('groq-sdk');
+        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+        const groqRes = await groq.chat.completions.create({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            { role: 'system', content: systemInstruction },
+            { role: 'user', content: prompt }
+          ],
+          response_format: { type: 'json_object' }
+        });
+        rawOutput = groqRes.choices?.[0]?.message?.content;
+        modelSource = 'groq-llama3.3-realtime';
+      } catch (groqErr) {
+        console.warn(`[Assessment] Groq tier failed: ${groqErr.message}`);
+      }
+    }
+
+    rawOutput = (rawOutput || '').trim();
+    if (rawOutput.startsWith('```json')) {
+      rawOutput = rawOutput.replace(/^```json\s*/, '').replace(/\s*```$/, '').trim();
+    } else if (rawOutput.startsWith('```')) {
+      rawOutput = rawOutput.replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
+    }
+
+    let parsed = null;
+    try {
+      parsed = JSON.parse(rawOutput);
+    } catch (parseErr) {
+      console.warn('[Assessment] JSON parse failed, extracting via regex...');
+      const match = rawOutput.match(/\{[\s\S]*\}/);
+      if (match) {
+        parsed = JSON.parse(match[0]);
+      }
+    }
+
+    if (!parsed || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
+      throw new Error('AI did not return questions in expected JSON format: ' + (rawOutput.slice(0, 100) || 'empty'));
+    }
+
+    const formattedQuestions = parsed.questions.slice(0, 5).map((q, idx) => {
+      const questionText = q.question || q.question_text || `Question ${idx + 1}`;
+      const rawOptions = Array.isArray(q.options) && q.options.length >= 2
+        ? q.options
+        : (Array.isArray(q.choices) ? q.choices : ['Option A', 'Option B', 'Option C', 'Option D']);
+
+      let correctIndex = 0;
+      if (typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex < rawOptions.length) {
+        correctIndex = q.correctIndex;
+      } else if (q.correct_answer) {
+        const found = rawOptions.findIndex((opt) => opt.trim().toLowerCase() === String(q.correct_answer).trim().toLowerCase());
+        correctIndex = found >= 0 ? found : 0;
+      }
+
+      return {
+        id: q.id || q.question_id || idx + 1,
+        question: questionText,
+        options: rawOptions,
+        correctIndex,
+        explanation: q.explanation || (q.difficulty ? `${q.topic || topic} diagnostic check (${q.difficulty}).` : 'Review the core concept to understand this principle.')
+      };
+    });
+
+    console.log(`[Assessment] Successfully generated ${formattedQuestions.length} dynamic questions via ${modelSource}`);
+
+    return res.json({
+      success: true,
+      modelSource,
+      topicId: topic,
+      totalQuestions: formattedQuestions.length,
+      questions: formattedQuestions
+    });
+  } catch (error) {
+    console.error('[Assessment Error]:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to generate dynamic questions from AI: ' + error.message
+    });
+  }
+};
+
+/**
+ * Handle 5-Question Assessment Submission & Score Update
+ * Endpoint: POST /api/tutor/submit-assessment
+ */
+const submitTopicAssessment = async (req, res, next) => {
+  try {
+    const {
+      studentId = '65f000000000000000000001',
+      topicId = 'Concept Mastery',
+      correctCount = 5,
+      totalQuestions = 5
+    } = req.body;
+
+    const percentage = Math.round((correctCount / totalQuestions) * 100);
+    const passed = percentage >= 70;
+
+    // 1. Update Student in MongoDB
+    const Student = require('../models/Student');
+    let student = await Student.findById(studentId).catch(() => null);
+    if (student) {
+      student.overallMastery = Math.max(student.overallMastery || 40, percentage);
+      student.updatedAt = new Date();
+      await student.save().catch(() => {});
+    }
+
+    // 2. Save verified assessment interaction in MongoDB
+    await Interaction.create({
+      sessionId: 'session-demo-001',
+      studentId,
+      topicId,
+      studentPrompt: `Completed 5-Question Diagnostic Assessment via Gemma 3: ${correctCount}/${totalQuestions} correct (${percentage}%)`,
+      diagnosis: {
+        understandingScore: percentage,
+        misconceptionDetected: !passed,
+        misconceptionKey: passed ? null : `${topicId}_misconception`,
+        diagnosisSummary: passed ? `Student mastered ${topicId} with ${percentage}% score.` : `Review needed for ${topicId}.`,
+        confidenceScore: 0.95
+      },
+      strategyUsed: passed ? 'codeExecution' : 'analogy',
+      dnaSnapshot: { socratic: 20, analogical: 35, firstPrinciples: 15, visual: 20, codeExecution: 10 },
+      tutorResponse: {
+        headline: passed ? `🎉 ${topicId} Mastered (${percentage}%)!` : `🎯 Strategy Pivot for ${topicId}`,
+        coreExplanation: `Student completed 5-question dynamic Ollama assessment with ${correctCount} of ${totalQuestions} correct answers.`,
+        socraticCheck: null
+      },
+      modelSource: 'gemma-3 (local)'
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      topicId,
+      score: percentage,
+      correctCount,
+      totalQuestions,
+      passed,
+      recommendedStrategy: passed ? 'Code & Sandbox' : 'Analogy & Real-World Metaphor',
+      feedback: passed
+        ? `Outstanding work! You demonstrated mastery of ${topicId}. Understanding score updated to ${percentage}% in MongoDB.`
+        : `Good effort! You scored ${percentage}%. We recommend reviewing key mechanisms using intuitive analogies.`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   diagnoseStudentInput,
   processStudentInteraction,
-  verifyStudentAnswer
+  verifyStudentAnswer,
+  getTopicAssessment,
+  submitTopicAssessment
 };

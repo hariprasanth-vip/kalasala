@@ -149,10 +149,20 @@ const completeSession = async (req, res, next) => {
   }
 };
 
+const getHistory = async (req, res, next) => {
+  try {
+    const history = await Interaction.find().sort({ createdAt: -1 }).limit(50).lean().catch(() => []);
+    return res.json({ success: true, history: history.length > 0 ? history : inMemoryInteractions });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   startSession,
   getSessionDetails,
   completeSession,
+  getHistory,
   inMemorySessions,
   inMemoryInteractions
 };

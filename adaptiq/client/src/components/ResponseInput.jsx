@@ -3,7 +3,7 @@ import { Sparkles, Paperclip, Send, Mic } from 'lucide-react';
 import { useTutor } from '../context/TutorContext';
 
 export default function ResponseInput() {
-  const { handleStudentResponse, isAnalyzing } = useTutor();
+  const { handleStudentResponse, isAnalyzing, launchAssessment, selectedTopic } = useTutor();
   const [inputText, setInputText] = useState('');
 
   const handleSubmit = (e) => {
@@ -22,51 +22,40 @@ export default function ResponseInput() {
     <div className="response-input-container">
       {/* Quick Demo Guidance Chips */}
       <div className="quick-chips-row">
-        <span className="chips-label">Quick Prompts:</span>
         <button
           type="button"
-          className="demo-chip misconception-chip"
-          onClick={() =>
-            handleQuickChip(
-              "Networking concept puriyala. Diagram vechu explain panna easy-a irukku."
-            )
-          }
+          className="demo-chip assessment-chip"
+          onClick={() => launchAssessment(selectedTopic)}
+          style={{
+            background: 'linear-gradient(135deg, rgba(0, 242, 254, 0.22), rgba(168, 85, 247, 0.22))',
+            border: '1px solid #00f2fe',
+            color: '#00f2fe',
+            fontWeight: 700,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+          title="Ask Ollama to generate 5 real-time diagnostic questions"
         >
-          🌐 "Networking concept puriyala..."
+          <span>📝 Take 5-Q Diagnostic Quiz (Ollama)</span>
         </button>
-        <button
-          type="button"
-          className="demo-chip misconception-chip"
-          onClick={() =>
-            handleQuickChip(
-              "Idhu thannai thaane mudive illama call pannitte irukkum (Recursion means calling itself forever)"
-            )
-          }
-        >
-          💡 "Idhu thannai thaane mudive illama call..."
-        </button>
-        <button
-          type="button"
-          className="demo-chip breakthrough-chip"
-          onClick={() =>
-            handleQuickChip(
-              "Oru staircase-la ground floor thaan Base Case, ground floor reach aana udane stop aagi return aagum!"
-            )
-          }
-        >
-          ✨ "Staircase-la ground floor thaan Base Case..."
-        </button>
-        <button
-          type="button"
-          className="demo-chip"
-          onClick={() =>
-            handleQuickChip(
-              "Vanakkam! Let's start learning computer networks today."
-            )
-          }
-        >
-          👋 "Vanakkam! Let's start learning..."
-        </button>
+
+        {selectedTopic && selectedTopic !== 'General Learning' && (
+          <span style={{
+            fontSize: '0.8rem',
+            color: '#94a3b8',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '4px 10px',
+            background: 'rgba(255, 255, 255, 0.04)',
+            borderRadius: '9999px',
+            border: '1px solid rgba(255, 255, 255, 0.08)'
+          }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#00f2fe' }}></span>
+            Topic: <strong style={{ color: '#f1f5f9' }}>{selectedTopic}</strong>
+          </span>
+        )}
       </div>
 
       {/* Main Input Bar */}

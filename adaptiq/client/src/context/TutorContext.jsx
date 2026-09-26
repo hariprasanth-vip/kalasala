@@ -1,5 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { sendStudentInteraction, verifyQuickCheck, fetchStudentDna } from '../services/api';
+import {
+  sendStudentInteraction,
+  verifyQuickCheck,
+  fetchStudentDna,
+  fetchLearningHistory,
+  fetchStudentProfile,
+  updateStudentProfileApi,
+  loginStudentApi,
+  registerStudentApi
+} from '../services/api';
 
 const TutorContext = createContext();
 
@@ -18,14 +27,36 @@ export const TutorProvider = ({ children }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState('General Learning');
 
-  // Student Profile
-  const [studentProfile, setStudentProfile] = useState({
-    name: 'Aarav Sharma',
-    email: 'student@adaptiq.com',
-    level: 4,
-    conceptsMastered: 12,
-    studyTime: '15h'
+  // Student Profile (dynamic with MongoDB + localStorage persistence)
+  const [studentProfile, setStudentProfile] = useState(() => {
+    try {
+      const saved = localStorage.getItem('adaptiq_student_profile');
+      if (saved) return JSON.parse(saved);
+    } catch (e) { }
+    return {
+      _id: '65f000000000000000000001',
+      name: 'Sharvesh',
+      email: 'sharvesh@adaptiq.com',
+      password: 'adaptiq123',
+      studentIdNumber: 'ADAPTIQ-2026',
+      level: 4,
+      gradeLevel: 'Undergraduate Computer Science - Year 3',
+      conceptsMastered: 12,
+      studyTime: '15h'
+    };
   });
+
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileModalMode, setProfileModalMode] = useState('edit'); // 'edit' | 'logout'
+
+  // 5-Question Real-Time Assessment via Ollama
+  const [isAssessmentOpen, setIsAssessmentOpen] = useState(false);
+  const [assessmentTopic, setAssessmentTopic] = useState('');
+
+  const launchAssessment = (topicName) => {
+    setAssessmentTopic(topicName || selectedTopic || 'Recursion');
+    setIsAssessmentOpen(true);
+  };
 
   // Understanding Score (starts at neutral baseline 50%)
   const [understandingScore, setUnderstandingScore] = useState(50);
@@ -62,8 +93,29 @@ export const TutorProvider = ({ children }) => {
     discoveryPrinciple: 'The system does not assume how the student learns. It discovers what works through interaction.'
   });
 
-  // Sync initial DNA from backend on mount
+  // Sync initial DNA, profile from MongoDB and dynamic history stats from backend on mount
   useEffect(() => {
+    // 1. Fetch real student profile from MongoDB directly
+    fetchStudentProfile().then((dbStudent) => {
+      if (dbStudent) {
+        setStudentProfile((prev) => {
+          const merged = {
+            ...prev,
+            _id: dbStudent._id || prev._id,
+            name: dbStudent.name || prev.name,
+            email: dbStudent.email || prev.email,
+            password: dbStudent.password || prev.password || 'adaptiq123',
+            gradeLevel: dbStudent.gradeLevel || prev.gradeLevel,
+            studentIdNumber: dbStudent.studentIdNumber || prev.studentIdNumber || 'ADAPTIQ-2026',
+            overallMastery: dbStudent.overallMastery ?? prev.overallMastery
+          };
+          localStorage.setItem('adaptiq_student_profile', JSON.stringify(merged));
+          return merged;
+        });
+      }
+    }).catch(() => { });
+
+    // 2. Fetch DNA profile
     fetchStudentDna().then((profile) => {
       if (profile && profile.dna) {
         const sorted = Object.entries(profile.dna).sort((a, b) => b[1] - a[1]);
@@ -78,7 +130,23 @@ export const TutorProvider = ({ children }) => {
           }));
         }
       }
-    }).catch(() => {});
+    }).catch(() => { });
+
+    // 3. Fetch history stats
+    fetchLearningHistory().then((history) => {
+      if (history && history.length > 0) {
+        const distinctConcepts = new Set(history.map((h) => h.topicId).filter(Boolean)).size;
+        const totalTime = Math.max(1, Math.round(history.length * 0.4));
+        const dynamicLevel = Math.max(1, Math.min(10, Math.floor(history.length / 5) + 1));
+
+        setStudentProfile((prev) => ({
+          ...prev,
+          conceptsMastered: Math.max(prev.conceptsMastered, distinctConcepts),
+          level: Math.max(prev.level, dynamicLevel),
+          studyTime: `${totalTime}h`
+        }));
+      }
+    }).catch(() => { });
   }, []);
 
   // Learning Progress Sparkline Points (SVG trend)
@@ -147,7 +215,7 @@ export const TutorProvider = ({ children }) => {
         selectedOptionIndex,
         correctOptionIndex,
         strategyUsed
-      }).catch(() => {});
+      }).catch(() => { });
     }
   };
 
@@ -223,8 +291,8 @@ export const TutorProvider = ({ children }) => {
           description: `Student is asking about ${detectedConcept}.`
         });
         setStrategyInfo({
-          name: res.recommendedStrategy 
-            ? (res.recommendedStrategy.charAt(0).toUpperCase() + res.recommendedStrategy.slice(1) + ' Mode') 
+          name: res.recommendedStrategy
+            ? (res.recommendedStrategy.charAt(0).toUpperCase() + res.recommendedStrategy.slice(1) + ' Mode')
             : 'Analogy Mode',
           reason: res.strategyReason || 'Directly addressing student question using high-retention pedagogy.'
         });
@@ -245,8 +313,8 @@ export const TutorProvider = ({ children }) => {
           description: res.misconception || `Student has a misconception about ${detectedConcept}.`
         });
         setStrategyInfo({
-          name: res.recommendedStrategy 
-            ? (res.recommendedStrategy.charAt(0).toUpperCase() + res.recommendedStrategy.slice(1) + ' Strategy') 
+          name: res.recommendedStrategy
+            ? (res.recommendedStrategy.charAt(0).toUpperCase() + res.recommendedStrategy.slice(1) + ' Strategy')
             : 'Analogy Strategy',
           reason: res.strategyReason || 'Pivoting pedagogical strategy to address the identified misconception.'
         });
@@ -295,17 +363,70 @@ export const TutorProvider = ({ children }) => {
         practicePrompt = {
           question: res.quickCheckQuestion.question,
           options: res.quickCheckQuestion.options || ['Stopping condition', 'Infinite loop', 'Memory error'],
-          correctIndex: res.quickCheckQuestion.correctOptionIndex ?? 0,
+          correctIndex: Number(res.quickCheckQuestion.correctOptionIndex ?? res.quickCheckQuestion.correctIndex ?? 0),
           hint: res.quickCheckQuestion.hint || 'Think of the condition that stops execution.'
         };
       }
 
+      // 6b. Sanitize explanation text to strip embedded questions, options, or ASCII diagrams
+      let cleanExplanation = (res.remediationContent || res.interaction?.tutorResponse?.coreExplanation || 'Let\'s explore this concept together.').trim();
+      let visualDiagram = res.visualDiagram || null;
+
+      // Extract & strip Active Recall Question block from explanation if model merged it
+      const questionBlockRegex = /(?:\*{0,2}(?:Active Recall|Practice|Quick Check|Diagnostic|Self-Check|Concept Check)\s*(?:Practice\s*)?Question\s*:?\*{0,2}[\s\S]*)/i;
+      const qMatch = cleanExplanation.match(questionBlockRegex);
+      if (qMatch) {
+        const block = qMatch[0];
+        if (!practicePrompt) {
+          const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
+          let qText = '';
+          const options = [];
+          for (const line of lines) {
+            if (/^(?:\*{0,2}(?:Active Recall|Practice|Quick Check|Diagnostic|Self-Check|Concept Check))/i.test(line)) {
+              const afterColon = line.replace(/^\*{0,2}[^:]*:\*{0,2}\s*/, '').trim();
+              if (afterColon) qText = afterColon;
+              continue;
+            }
+            const optMatch = line.match(/^(?:[-*•]\s*)?([a-dA-D1-4])[.)\]]\s*(.+)$/);
+            if (optMatch) {
+              options.push(optMatch[2].trim());
+            } else if (!qText) {
+              qText = line;
+            }
+          }
+          if (qText && options.length >= 2) {
+            practicePrompt = {
+              question: qText,
+              options,
+              correctIndex: 0,
+              hint: 'Select the best option based on the explanation above.'
+            };
+          }
+        }
+        cleanExplanation = cleanExplanation.replace(questionBlockRegex, '').trim();
+      }
+
+      // Extract & strip ASCII diagram from explanation if model merged it
+      const diagramRegex = /(?:\*{0,2}(?:ASCII\s*(?:Structural\s*)?Diagram|Visual\s*(?:Concept\s*)?Diagram|Flowchart|Diagram)\s*:?\*{0,2}\s*(?:```[\s\S]*?```|`[\s\S]*?`))/i;
+      const diagMatch = cleanExplanation.match(diagramRegex);
+      if (diagMatch) {
+        if (!visualDiagram) {
+          const codeMatch = diagMatch[0].match(/```(?:\w+)?\s*([\s\S]*?)```/);
+          visualDiagram = codeMatch ? codeMatch[1].trim() : diagMatch[0].replace(/^\*{0,2}[^:]*:\*{0,2}\s*/i, '').trim();
+        }
+        cleanExplanation = cleanExplanation.replace(diagramRegex, '').trim();
+      }
+
+      // Strip trailing option lines or stray diagram code fences from explanation
+      cleanExplanation = cleanExplanation.replace(/\n+(?:(?:[-*•]\s*)?[a-dA-D1-4][.)\]]\s*.+\n?){2,}$/i, '').trim();
+      cleanExplanation = cleanExplanation.replace(/```(?:ascii|text)?\s*[\s\S]*?[/\\|+_]{2,}[\s\S]*?```/gi, '').trim();
+
       // 7. Dynamic Headline — use LLM's headline, fallback is topic-aware
       const tutorHeadline = res.headline || (
         isGreeting ? '👋 Welcome to AdaptIQ!' :
-        isInquiry ? `💡 Understanding ${detectedConcept}` :
-        isMisconception ? `🎯 Strategy Pivot: Clarifying ${res.missingConcept || detectedConcept}` :
-        `🎉 ${detectedConcept} Mastered!`
+          isInquiry ? `💡 Understanding ${detectedConcept}` :
+            isMisconception ? `🎯 Strategy Pivot: Clarifying ${res.missingConcept || detectedConcept}` :
+              `🎉 ${detectedConcept} Mastered!`
       );
 
       // 8. Construct Tutor Assistant Message
@@ -314,8 +435,8 @@ export const TutorProvider = ({ children }) => {
         role: 'assistant',
         strategyUsed: res.recommendedStrategy ? (res.recommendedStrategy.charAt(0).toUpperCase() + res.recommendedStrategy.slice(1)) : (isGreeting ? 'Conversational' : 'Analogy'),
         headline: tutorHeadline,
-        text: res.remediationContent || res.interaction?.tutorResponse?.coreExplanation || 'Let\'s explore this concept together.',
-        visualDiagram: res.visualDiagram || null,
+        text: cleanExplanation,
+        visualDiagram: visualDiagram,
         codeSnippet: res.codeSnippet || null,
         practicePrompt,
         timestamp: 'Just now'
@@ -366,12 +487,82 @@ export const TutorProvider = ({ children }) => {
     ]);
   };
 
+  // Save / Update credentials in MongoDB and local state
+  const saveStudentCredentials = async (updatedData) => {
+    const targetId = studentProfile._id || '65f000000000000000000001';
+    const res = await updateStudentProfileApi(updatedData, targetId);
+    if (res && res.success && res.student) {
+      const merged = {
+        ...studentProfile,
+        ...res.student,
+        level: studentProfile.level,
+        conceptsMastered: studentProfile.conceptsMastered,
+        studyTime: studentProfile.studyTime
+      };
+      setStudentProfile(merged);
+      localStorage.setItem('adaptiq_student_profile', JSON.stringify(merged));
+      return { success: true, student: merged, message: res.message || 'Saved to MongoDB' };
+    }
+    // Fallback local update
+    const local = { ...studentProfile, ...updatedData };
+    setStudentProfile(local);
+    localStorage.setItem('adaptiq_student_profile', JSON.stringify(local));
+    return { success: true, student: local, message: 'Saved to local cache' };
+  };
+
+  // Authenticate student with email and password from MongoDB
+  const loginStudent = async (email, password) => {
+    const res = await loginStudentApi({ email, password });
+    if (res && res.success && res.student) {
+      const merged = {
+        ...res.student,
+        level: Math.max(1, Math.floor((res.student.overallMastery || 50) / 10)),
+        conceptsMastered: studentProfile.conceptsMastered,
+        studyTime: studentProfile.studyTime
+      };
+      setStudentProfile(merged);
+      localStorage.setItem('adaptiq_student_profile', JSON.stringify(merged));
+      return { success: true, student: merged };
+    }
+    return { success: false, message: res?.message || 'Login failed' };
+  };
+
+  // Register new student in MongoDB
+  const registerStudent = async (studentData) => {
+    const res = await registerStudentApi(studentData);
+    if (res && res.success && res.student) {
+      const merged = {
+        ...res.student,
+        level: 1,
+        conceptsMastered: 0,
+        studyTime: '1h'
+      };
+      setStudentProfile(merged);
+      localStorage.setItem('adaptiq_student_profile', JSON.stringify(merged));
+      return { success: true, student: merged };
+    }
+    return { success: false, message: res?.message || 'Registration failed' };
+  };
+
   return (
     <TutorContext.Provider
       value={{
         activeTab,
         setActiveTab,
         studentProfile,
+        setStudentProfile,
+        saveStudentCredentials,
+        loginStudent,
+        registerStudent,
+        isProfileModalOpen,
+        setIsProfileModalOpen,
+        profileModalMode,
+        setProfileModalMode,
+        isAssessmentOpen,
+        setIsAssessmentOpen,
+        assessmentTopic,
+        setAssessmentTopic,
+        launchAssessment,
         selectedTopic,
         setSelectedTopic,
         understandingScore,

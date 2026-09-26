@@ -87,8 +87,9 @@ This is a friendly greeting. Output status="greeting", score=50, headline="👋 
 The student wants to learn about "${conceptName}".
 This is a core topic inquiry, NOT a greeting! Output status="inquiry", score=60, detectedConcept="${conceptName}".
 In remediationContent, thoroughly explain what ${conceptName} is, its core pillars, why it matters, and how it is used in the real world using the "${activeStrategy}" teaching strategy.
-Include an ASCII structural diagram in visualDiagram.
-Include an active recall practice question in quickCheckQuestion.
+CRITICAL: Do NOT put diagrams, flowcharts, or questions in remediationContent!
+Put the ASCII structural diagram in visualDiagram.
+Put the active recall multiple choice question with options array in quickCheckQuestion so the UI can render interactive option buttons below the chat.
 Respond ONLY with valid JSON.`
     };
   }
@@ -138,6 +139,8 @@ Analyze the student's submission carefully:
 - If asking what/how/why/explain: status="inquiry", score=60, explain thoroughly using "${activeStrategy}" strategy. Include visual diagram and code snippet if applicable.
 - If student expresses misconception/flaw: status="misconception", score=30-50, pinpoint the missing concept and correct their mental model.
 - If student demonstrates correct understanding: status="mastery", score=80-95, praise their understanding and deepen it.
+
+CRITICAL: Keep remediationContent as PURE explanation only. Put ASCII diagram in visualDiagram and multiple choice question with options array in quickCheckQuestion so the UI displays interactive buttons!
 Respond ONLY with valid JSON.`
   };
 }

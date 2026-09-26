@@ -3,9 +3,11 @@ const router = express.Router();
 const {
   startSession,
   getSessionDetails,
-  completeSession
+  completeSession,
+  getHistory
 } = require('../controllers/sessionController');
 
+router.get('/history/all', getHistory);
 router.post('/start', startSession);
 router.get('/:id', getSessionDetails);
 router.post('/:id/complete', completeSession);

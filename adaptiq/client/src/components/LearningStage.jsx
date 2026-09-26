@@ -17,7 +17,16 @@ import {
 import { useTutor } from '../context/TutorContext';
 
 export default function LearningStage() {
-  const { messages, isAnalyzing, understandingScore, misconception, handleVerifyAnswer, handleStudentResponse } = useTutor();
+  const {
+    messages,
+    isAnalyzing,
+    understandingScore,
+    misconception,
+    handleVerifyAnswer,
+    handleStudentResponse,
+    launchAssessment,
+    selectedTopic
+  } = useTutor();
   const [selectedAnswers, setSelectedAnswers] = useState({});
   const [submittedQuiz, setSubmittedQuiz] = useState({});
 
@@ -58,106 +67,99 @@ export default function LearningStage() {
               <span>Always Learning</span>
             </div>
           </div>
+
+          <div style={{ marginTop: '14px' }}>
+            <button
+              type="button"
+              onClick={() => launchAssessment(selectedTopic)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 18px',
+                borderRadius: '20px',
+                background: 'linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(168, 85, 247, 0.15))',
+                border: '1px solid rgba(0, 242, 254, 0.4)',
+                color: '#00f2fe',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 2px 10px rgba(0, 242, 254, 0.15)',
+                transition: 'all 0.2s ease'
+              }}
+              title="Generate 5 real-time diagnostic questions from Ollama"
+            >
+              <Brain size={14} />
+              <span>📝 Test Understanding with 5 Dynamic Questions (Gemma 3)</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Stream of Interactive Pedagogical Cards */}
       <div className="messages-stream">
-        {/* ChatGPT / Gemini style clean initial welcome screen */}
+        {/* Modern clean AI welcome screen - Zero static cards */}
         {messages.length === 0 && (
           <div className="empty-chat-welcome" style={{
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '2.5rem 1rem',
+            padding: '4rem 1.5rem 2rem',
             textAlign: 'center',
-            maxWidth: '680px',
+            maxWidth: '620px',
             margin: '0 auto'
           }}>
+            <div style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '20px',
+              background: 'linear-gradient(135deg, rgba(0, 242, 254, 0.18), rgba(168, 85, 247, 0.18))',
+              border: '1px solid rgba(0, 242, 254, 0.35)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '1.5rem',
+              boxShadow: '0 12px 36px rgba(0, 242, 254, 0.15)'
+            }}>
+              <Sparkles size={32} style={{ color: '#00f2fe' }} />
+            </div>
+
             <h2 style={{
-              fontSize: '1.6rem',
-              fontWeight: 700,
+              fontSize: '1.85rem',
+              fontWeight: 800,
               background: 'linear-gradient(135deg, #ffffff 0%, #00f2fe 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
-              marginBottom: '0.6rem'
+              marginBottom: '0.75rem',
+              letterSpacing: '-0.02em'
             }}>
               What would you like to explore today?
             </h2>
-            <p style={{ color: '#94a3b8', fontSize: '0.92rem', maxWidth: '500px', lineHeight: 1.5, marginBottom: '2rem' }}>
-              Ask any question, share what you understand, or pick a starter below. AdaptIQ will adapt its teaching strategy directly to your cognitive style.
+
+            <p style={{
+              color: '#94a3b8',
+              fontSize: '0.98rem',
+              maxWidth: '480px',
+              lineHeight: 1.6,
+              margin: '0 0 1.5rem 0'
+            }}>
+              Ask any Computer Science question, algorithm doubt, code structure, or concept. AdaptIQ dynamically evaluates your mental model and personalizes its pedagogical strategy in real-time.
             </p>
 
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '0.85rem',
-              width: '100%'
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '6px 14px',
+              borderRadius: '9999px',
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              color: '#94a3b8',
+              fontSize: '0.82rem'
             }}>
-              {[
-                {
-                  icon: '🌐',
-                  title: 'Computer Networks',
-                  prompt: 'Networking concept puriyala. Diagram vechu explain panna easy-a irukku.',
-                  desc: 'Explain networking layers with visual topology'
-                },
-                {
-                  icon: '🔄',
-                  title: 'Recursion Foundations',
-                  prompt: 'Explain how recursion works with a simple real-world analogy.',
-                  desc: 'Discover base cases with the staircase metaphor'
-                },
-                {
-                  icon: '🔍',
-                  title: 'Binary Search',
-                  prompt: 'How does Binary Search divide and conquer an array?',
-                  desc: 'Trace mid-points and logarithmic efficiency'
-                },
-                {
-                  icon: '📦',
-                  title: 'Data Structures',
-                  prompt: 'What is the key difference between an Array and a Linked List?',
-                  desc: 'Memory allocation, contiguous blocks & pointers'
-                }
-              ].map((item, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleStudentResponse && handleStudentResponse(item.prompt)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '12px',
-                    textAlign: 'left',
-                    padding: '1rem',
-                    borderRadius: '12px',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(0, 242, 254, 0.4)';
-                    e.currentTarget.style.background = 'rgba(0, 242, 254, 0.06)';
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }}
-                >
-                  <span style={{ fontSize: '1.4rem' }}>{item.icon}</span>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#f1f5f9', marginBottom: '0.25rem' }}>
-                      {item.title}
-                    </div>
-                    <div style={{ fontSize: '0.78rem', color: '#94a3b8', lineHeight: 1.35 }}>
-                      {item.desc}
-                    </div>
-                  </div>
-                </button>
-              ))}
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }}></span>
+              <span>Gemma 3 AI Model Active & Ready</span>
             </div>
           </div>
         )}
@@ -214,9 +216,18 @@ export default function LearningStage() {
                   <span className="card-timestamp">{msg.timestamp || 'Just now'}</span>
                 </div>
 
-                {/* Core Explanation Text */}
+                {/* Core Explanation Text (Cleaned of duplicate embedded diagrams/questions) */}
                 <div className="tutor-card-body">
-                  <p className="explanation-paragraph" style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</p>
+                  <p className="explanation-paragraph" style={{ whiteSpace: 'pre-wrap' }}>
+                    {msg.text
+                      ? msg.text
+                          .replace(/(?:\*{0,2}(?:Active Recall|Practice|Quick Check|Diagnostic|Self-Check|Concept Check)\s*(?:Practice\s*)?Question\s*:?\*{0,2}[\s\S]*)/i, '')
+                          .replace(/(?:\*{0,2}(?:ASCII\s*(?:Structural\s*)?Diagram|Visual\s*(?:Concept\s*)?Diagram|Flowchart|Diagram)\s*:?\*{0,2}\s*(?:```[\s\S]*?```|`[\s\S]*?`))/i, '')
+                          .replace(/\n+(?:(?:[-*•]\s*)?[a-dA-D1-4][.)\]]\s*.+\n?){2,}$/i, '')
+                          .replace(/```(?:ascii|text)?\s*[\s\S]*?[/\\|+_]{2,}[\s\S]*?```/gi, '')
+                          .trim()
+                      : ''}
+                  </p>
 
                   {/* Visual Diagram Box */}
                   {msg.visualDiagram && (

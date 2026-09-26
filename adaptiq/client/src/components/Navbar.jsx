@@ -1,13 +1,30 @@
 import React from 'react';
-import { Brain, Wifi, User, ChevronDown } from 'lucide-react';
+import { Brain, User, ChevronDown } from 'lucide-react';
 import { useTutor } from '../context/TutorContext';
 
 export default function Navbar() {
-  const { studentProfile } = useTutor();
+  const {
+    studentProfile,
+    setActiveTab,
+    setIsProfileModalOpen,
+    setProfileModalMode
+  } = useTutor();
+
+  const handleOpenProfile = () => {
+    setProfileModalMode('edit');
+    setIsProfileModalOpen(true);
+  };
+
+  const displayName = studentProfile.name ? studentProfile.name.split(' ')[0] : 'Learner';
 
   return (
     <header className="navbar-container">
-      <div className="navbar-brand">
+      <div
+        className="navbar-brand"
+        onClick={() => setActiveTab('home')}
+        style={{ cursor: 'pointer' }}
+        title="Go to Dashboard"
+      >
         <div className="brand-logo-glow">
           <Brain className="brand-icon" size={24} />
         </div>
@@ -22,11 +39,17 @@ export default function Navbar() {
           <span className="status-text">Online</span>
         </div>
 
-        <div className="user-profile-badge">
+        <div
+          className="user-profile-badge"
+          onClick={handleOpenProfile}
+          title="Click to edit or switch student profile"
+          style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
+          id="navbar-user-badge"
+        >
           <div className="avatar-circle">
             <User size={16} />
           </div>
-          <span className="profile-name">{studentProfile.name.split(' ')[0]}</span>
+          <span className="profile-name">{displayName}</span>
           <ChevronDown size={14} className="profile-chevron" />
         </div>
       </div>

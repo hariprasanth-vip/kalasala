@@ -5,7 +5,7 @@ const StudentSchema = new mongoose.Schema({
     type: String,
     required: true,
     trim: true,
-    default: 'Aarav Sharma'
+    default: 'Sharvesh'
   },
   email: {
     type: String,
@@ -13,11 +13,19 @@ const StudentSchema = new mongoose.Schema({
     unique: true,
     lowercase: true,
     trim: true,
-    default: 'aarav.sharma@kalasala.edu'
+    default: 'sharvesh@adaptiq.com'
+  },
+  password: {
+    type: String,
+    default: 'adaptiq123'
+  },
+  studentIdNumber: {
+    type: String,
+    default: 'ADAPTIQ-2026'
   },
   gradeLevel: {
     type: String,
-    default: 'Undergraduate CS - Year 2'
+    default: 'Undergraduate Computer Science - Year 3'
   },
   currentTopicId: {
     type: String,
@@ -25,7 +33,7 @@ const StudentSchema = new mongoose.Schema({
   },
   overallMastery: {
     type: Number,
-    default: 42 // Demo starting level
+    default: 50
   },
   activeMisconceptions: [
     {
@@ -35,7 +43,15 @@ const StudentSchema = new mongoose.Schema({
       resolved: { type: Boolean, default: false }
     }
   ],
+  lastLogin: {
+    type: Date,
+    default: Date.now
+  },
   createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
     type: Date,
     default: Date.now
   }
